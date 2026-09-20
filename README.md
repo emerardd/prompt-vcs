@@ -1,335 +1,148 @@
 # prompt-vcs
 
-[![PyPI version](https://img.shields.io/pypi/v/prompt-vcs.svg)](https://img.shields.io/pypi/v/prompt-vcs.svg)
+[![PyPI version](https://img.shields.io/pypi/v/prompt-vcs.svg)](https://pypi.org/project/prompt-vcs/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-> Git-native prompt management library for LLM applications
-
-A lightweight, code-first Python library for managing LLM prompts using Git and the file system — no external database required.
+Git-native prompt management for Python applications. Keep prompts in code or YAML, pin production versions with a lockfile, and review every change through Git. No database or hosted service is required.
 
 [中文文档](README.zh-CN.md)
 
-## ✨ Features
+## Why prompt-vcs
 
-- 🚀 **Zero Configuration** - Define prompts directly in code, no extra setup needed
-- 📦 **Git Native** - Version control through file system and Git
-- 📄 **Single-File Mode** - All prompts in one `prompts.yaml` (default, clean and simple)
-- 📂 **Multi-File Mode** - Separate files per prompt (for large projects)
-- 🔄 **Lockfile Mechanism** - Lock specific versions for production, use code strings in development
-- 🛠️ **Auto Migration** - One-click conversion of hardcoded prompts to managed format
-- 🧪 **Testing Framework** - Define and run test cases for prompts with YAML-based test suites
-- ✅ **Output Validation** - Validate prompt outputs with JSON schema, regex, length checks, and custom rules
-- 🔬 **A/B Testing** - Compare different prompt versions and analyze LLM output effectiveness
-- 🎯 **Type Safe** - Full type hints support
+- Code-first workflow with `p()` and `@prompt`.
+- Single-file `prompts.yaml` by default, with a split-file mode for larger projects.
+- Explicit version pinning through `.prompt_lock.json`; invalid or missing locked versions fail instead of silently falling back.
+- CLI support for extraction, migration, version switching, history, testing, validation, A/B experiments, and export.
+- Typed Python API, Jinja sandboxing, atomic state writes, and automatic cache refresh after file changes.
 
-## 📦 Installation
+## Install
 
 ```bash
 pip install prompt-vcs
-
-# Optional: statistically tested A/B winner detection for small samples
-pip install "prompt-vcs[analysis]"
 ```
 
-## 🚀 Quick Start
-
-### 1. Initialize Project
+Optional dependencies:
 
 ```bash
-# Single-file mode (default) - creates prompts.yaml
-pvcs init
-
-# Multi-file mode - creates prompts/ directory
-pvcs init --split
+pip install "prompt-vcs[validation]"  # JSON Schema validation
+pip install "prompt-vcs[analysis]"    # Welch's t-test for small A/B samples
 ```
 
-### 2. Inline Mode
+prompt-vcs requires Python 3.10 or newer.
+
+## Quick start
+
+Initialize a project:
+
+```bash
+pvcs init
+```
+
+Use a prompt directly in Python:
 
 ```python
 from prompt_vcs import p
 
-# Uses code string by default, switches to locked version when specified
-msg = p("user_greeting", "Hello {name}", name="Developer")
+message = p("user_greeting", "Hello {name}", name="Ada")
 ```
 
-### 3. Decorator Mode
+The string in code is the development default. To manage versions in YAML, add them to `prompts.yaml`:
 
-```python
-from prompt_vcs import prompt
-
-@prompt(id="system_core", default_version="v1")
-def get_system_prompt(role: str):
-    """
-    You are a helpful assistant playing the role of {role}.
-    """
-    pass
+```yaml
+user_greeting:
+  description: Greeting shown to a signed-in user
+  versions:
+    v1:
+      template: "Hello {{ name }}"
+    v2:
+      template: "Welcome back, {{ name }}"
 ```
 
-### 4. Extract Prompts to YAML
-
-```bash
-pvcs scaffold src/
-```
-
-### 5. Switch Versions
+Pin a version and inspect the result:
 
 ```bash
 pvcs switch user_greeting v2
+pvcs status
+pvcs diff user_greeting v1 v2
 ```
 
-### 6. Auto-Migrate Existing Code
+`pvcs switch` records the selected version in `.prompt_lock.json`. Commit that file with `prompts.yaml` so the application and its prompt versions move through Git together.
 
-Automatically convert hardcoded prompt strings to `p()` calls:
+For prompts already stored in YAML, the code can omit the default string:
+
+```python
+message = p("user_greeting", name="Ada")
+```
+
+## Storage modes
+
+The default single-file layout keeps the project compact:
+
+```text
+your-project/
+|-- .prompt_lock.json
+|-- prompts.yaml
+`-- src/
+```
+
+For a larger prompt collection, use `pvcs init --split` to store versions under `prompts/<id>/<version>.yaml`.
+
+## Main workflows
+
+| Workflow | Commands |
+| --- | --- |
+| Create and inspect | `init`, `list`, `status`, `add`, `delete` |
+| Extract or migrate | `scaffold`, `migrate`, `migrate --clean` |
+| Control versions | `switch`, `unlock`, `diff`, `log` |
+| Test outputs | `test`, `validate` |
+| Run experiments | `ab create`, `ab record`, `ab status`, `ab analyze` |
+| Integrate elsewhere | `export --format json`, `openai`, or `langchain` |
+
+Run `pvcs --help` or `pvcs <command> --help` for all options.
+
+Prompt tests render templates and apply deterministic assertions. Output validation supports substring, regex, length, JSON Schema, and custom rules. A/B experiments select prompt variants and store application-provided scores. These tools do not call an LLM or judge model quality on their own.
+
+See [Validation and testing](docs/VALIDATION_TESTING.md) for configuration examples.
+
+## Existing codebases
+
+Preview an automatic migration before changing source files:
 
 ```bash
-# Preview changes
 pvcs migrate src/ --dry-run
+```
 
-# Interactive migration (confirm each change)
+Then apply changes interactively or without prompts:
+
+```bash
 pvcs migrate src/
-
-# Apply all changes automatically
 pvcs migrate src/ --yes
-
-# Clean mode: extract prompts to YAML and remove from code
-# - If prompts.yaml exists → writes to prompts.yaml (single-file mode)
-# - Otherwise → creates prompts/{id}/v1.yaml (multi-file mode)
-pvcs migrate src/ --clean -y
 ```
 
-**Supported Conversions:**
+Use `--clean` to move templates into YAML and leave only prompt IDs and variables in code. Migration is implemented with LibCST so Python syntax and formatting remain structured.
 
-```python
-# Before
-prompt = f"Hello {user.name}, price: {price:.2f}"
+## Offline example
 
-# After (default mode) - keeps template in code
-from prompt_vcs import p
-prompt = p("demo_prompt", "Hello {user_name}, price: {price:.2f}", 
-           user_name=user.name, price=price)
-
-# After (--clean mode) - extracts template to YAML
-from prompt_vcs import p
-prompt = p("demo_prompt", user_name=user.name, price=price)
-# Template is stored in prompts.yaml or prompts/demo_prompt/v1.yaml
-```
-
-**Features:**
-- ✅ F-string variable extraction
-- ✅ Format spec preservation (`:.2f`)
-- ✅ Attribute/dict access sanitization (`user.name` → `user_name`)
-- ✅ Automatic import statement insertion
-- ✅ Smart skipping of short strings and complex expressions
-- ✅ **Clean mode**: Extract to YAML, keep only ID in code
-- ✅ **Auto-detects storage mode**: single-file (`prompts.yaml`) or multi-file (`prompts/`)
-
-## 📁 Project Structure
-
-### Single-File Mode (Default)
-
-```
-your-project/
-├── .prompt_lock.json     # Version lock file
-├── prompts.yaml          # All prompts in one file
-└── src/
-    └── your_code.py
-```
-
-**prompts.yaml format:**
-```yaml
-user_greeting:
-  description: "Greeting template"
-  template: |
-    Hello, {name}!
-
-system_core:
-  description: "System prompt"
-  template: |
-    You are a helpful assistant.
-```
-
-### Multi-File Mode (--split)
-
-```
-your-project/
-├── .prompt_lock.json     # Version lock file
-├── prompts/              # Prompt YAML files
-│   ├── user_greeting/
-│   │   ├── v1.yaml
-│   │   └── v2.yaml
-│   └── system_core/
-│       └── v1.yaml
-└── src/
-    └── your_code.py
-```
-
-## 🎯 Core Principles
-
-- **No Database** - File system is the database
-- **Git Native** - Version control relies on file naming conventions and Git commits
-- **Code First** - Developers define prompts in code first
-- **Zero Latency Dev** - Development mode uses code strings, production reads from Lockfile
-
-## 🧪 Testing Framework
-
-Define test cases in YAML and validate prompt outputs:
-
-```yaml
-# tests/prompts_test.yaml
-name: "Prompt Tests"
-tests:
-  - name: "greeting_test"
-    prompt_id: "user_greeting"
-    inputs:
-      name: "Developer"
-    expected_output: "Hello, Developer!"
-    validation:
-      - type: contains
-        substring: "Hello"
-      - type: length
-        max_length: 100
-```
-
-```python
-from prompt_vcs.testing import PromptTestRunner, load_test_suite_from_yaml
-
-# Load and run tests
-suite = load_test_suite_from_yaml("tests/prompts_test.yaml")
-runner = PromptTestRunner()
-results = runner.run_suite(suite)
-```
-
-**Validation Types:**
-- `json_schema` - Validate JSON structure (requires `pip install prompt-vcs[validation]`)
-- `regex` - Match patterns
-- `length` - Check min/max length
-- `contains` - Verify substring presence
-- `custom` - Custom validation functions
-
-## 🔬 A/B Testing
-
-Compare different prompt versions and analyze their effectiveness:
-
-```python
-from prompt_vcs import ABTestManager, ABTestConfig, ABTestVariant
-
-# Create an experiment
-manager = ABTestManager.get_instance()
-config = ABTestConfig(
-    name="greeting_test",
-    prompt_id="user_greeting",
-    variants=[
-        ABTestVariant("v1", weight=1.0),
-        ABTestVariant("v2", weight=1.0),
-    ],
-)
-manager.create_experiment(config)
-
-# Run experiment
-with manager.experiment("greeting_test") as exp:
-    prompt = exp.get_prompt(name="Alice")
-    response = my_llm.generate(prompt)  # Your LLM call
-    exp.record(output=response, score=0.8)
-
-# Analyze results
-result = manager.analyze("greeting_test")
-print(result.summary())
-```
-
-**CLI Commands:**
-
-```bash
-# Create an A/B test experiment
-pvcs ab create my_test user_greeting --variants v1,v2
-
-# List all experiments
-pvcs ab list
-
-# View experiment status
-pvcs ab status my_test
-
-# Manually record a result
-pvcs ab record my_test v1 --score 0.8
-
-# Analyze results
-pvcs ab analyze my_test
-```
-
-Winner detection requires at least five scored records per variant and 95%
-confidence. Install `prompt-vcs[analysis]` for Welch's t-test on small samples;
-without SciPy, a conservative normal approximation is used only for groups of
-at least 30 records.
-
-## 📖 CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `pvcs init` | Initialize project (single-file mode, creates prompts.yaml) |
-| `pvcs init --split` | Initialize project (multi-file mode, creates prompts/ dir) |
-| `pvcs scaffold <dir>` | Scan code and generate prompts (auto-detects mode) |
-| `pvcs switch <id> <version>` | Switch prompt version |
-| `pvcs status` | View current lock status |
-| `pvcs list` | List prompt IDs, locked versions, and available versions |
-| `pvcs add <id> <template>` | Add a prompt or prompt version |
-| `pvcs delete <id>` | Delete a prompt and remove its lock |
-| `pvcs unlock <id>` | Remove a prompt from the lockfile |
-| `pvcs migrate <path>` | Auto-migrate hardcoded prompts |
-| `pvcs migrate <path> --clean` | Migrate and extract prompts to YAML files |
-| `pvcs test <suite.yaml>` | Run prompt tests from YAML suite |
-| `pvcs validate <id> <output> --config <file>` | Validate output against configured rules |
-| `pvcs diff <id> <v1> <v2>` | Compare two versions of a prompt |
-| `pvcs log <id>` | Show Git commit history for a prompt |
-| `pvcs export --format <json\|openai\|langchain>` | Export prompts to a portable format |
-| `pvcs ab create <name> <id>` | Create an A/B test experiment |
-| `pvcs ab list` | List all A/B test experiments |
-| `pvcs ab status <name>` | View experiment status and variants |
-| `pvcs ab analyze <name>` | Analyze experiment results |
-| `pvcs ab record <name> <v>` | Manually record a test result |
-| `pvcs ab clear <name>` | Clear records for an experiment |
-
-Lockfiles are enforced strictly: if a locked version is missing or the
-lockfile is malformed, prompt resolution fails instead of silently falling
-back to another template.
-
-## ✅ Repository Verification
-
-Run the cross-platform verification entrypoint from the repository root:
-
-```bash
-python scripts/verify.py            # Full local regression suite
-python scripts/verify.py --quick    # Fast feedback while developing
-python scripts/verify.py --release  # Audit, package build, and wheel smoke test
-```
-
-Install the extension dependencies once before running the combined verification:
-
-```bash
-npm --prefix vscode-extension ci
-```
-
-## 🧰 Runnable Test Project
-
-The repository includes an offline customer-support test project that covers
-prompt rendering, version locking and switching, YAML test suites, output
-validation, and Python unit tests. It requires no API key:
+The repository includes a customer-support example covering rendering, version switching, YAML test suites, output validation, and Python tests without an API key:
 
 ```powershell
 python -m pip install -e ".[dev]"
 powershell -ExecutionPolicy Bypass -File .\examples\customer-support-demo\run_all.ps1
 ```
 
-See [`examples/customer-support-demo/README.md`](examples/customer-support-demo/README.md)
-for the complete walkthrough and expected output.
+See the [example walkthrough](examples/customer-support-demo/README.md) for the files, commands, and expected output.
 
-## 🤝 Contributing
+## Development
 
-Issues and Pull Requests are welcome!
+```bash
+python -m pip install -e ".[dev]"
+npm --prefix vscode-extension ci
+python scripts/verify.py --quick
+```
 
-## 📄 License
+Use `python scripts/verify.py` for the full local suite or `python scripts/verify.py --release` to also build and smoke-test distribution artifacts.
 
-MIT License - See [LICENSE](LICENSE) file for details
+## License
 
-## 👤 Author
-
-**emerard** - [@emerardd](https://github.com/emerardd)
+[MIT](LICENSE)
