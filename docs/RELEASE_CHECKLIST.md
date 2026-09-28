@@ -21,12 +21,7 @@ VS Code 扩展使用独立版本号，不要求与 Python 包版本同步。
 - [ ] `pyproject.toml` 的 `project.version`
 - [ ] `src/prompt_vcs/__init__.py` 的 `__version__`
 
-PowerShell 检查：
-
-```powershell
-python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-python -c "from prompt_vcs import __version__; print(__version__)"
-```
+检查这两处的版本号以及即将创建的 `vX.Y.Z` 标签是否一致。使用 Python 3.10 发布时无需额外安装 `tomllib`；发布验证脚本会检查版本一致性。
 
 还需确认目标版本尚未出现在
 [prompt-vcs 的 PyPI 发布历史](https://pypi.org/project/prompt-vcs/#history)。

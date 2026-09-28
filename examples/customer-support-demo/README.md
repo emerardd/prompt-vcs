@@ -1,23 +1,8 @@
 # prompt-vcs 客服场景测试项目
 
-这是一个可以离线运行的最小完整项目，用来验证当前仓库中的 `prompt-vcs` 是否能正常完成：
-
-- 从 `prompts.yaml` 读取并渲染 Prompt；
-- 使用 `.prompt_lock.json` 锁定 `v1`；
-- 对比并切换 `v1`、`v2`；
-- 运行 YAML Prompt 测试套件；
-- 验证模拟回复是否满足规则；
-- 用 Python 单元测试同时覆盖两个 Prompt 版本。
+这是一个离线示例，覆盖 Prompt 渲染、版本锁定与切换、YAML 测试、输出验证和 Python 单元测试。
 
 示例不会调用真实 LLM，也不需要 API Key。`app.py` 输出中的“模拟模型响应”是固定测试数据，不能视为模型效果测试。
-
-## 为什么放在当前仓库内
-
-建议位置就是现在的 `examples/customer-support-demo/`，而不是仓库外的新项目。
-
-这样做的原因是：它属于当前库的可运行用例，可以直接验证尚未发布的本地源码，也能随代码变更一起回归测试；同时它位于独立子目录，不会把业务样例混入 `src/prompt_vcs` 核心包。
-
-只有当你准备把客服样例继续开发成真实产品、需要独立发布或需要自己的 Git 历史时，才适合把它复制为仓库外的新项目。
 
 ## 环境要求
 
@@ -30,7 +15,7 @@
 python -m pip install -e ".[dev]"
 ```
 
-这会以可编辑模式安装当前源码。以后修改 `src/prompt_vcs` 后不必重复安装。
+这会以可编辑模式安装当前源码。
 
 ## 一条命令完成全部测试
 
@@ -42,36 +27,7 @@ powershell -ExecutionPolicy Bypass -File .\examples\customer-support-demo\run_al
 
 脚本依次运行示例应用、YAML 测试套件、Python 单元测试、回复验证和版本差异检查。任何一步失败都会停止并返回非零退出码。
 
-### 成功时的预期结果
-
-输出较长，但应出现以下关键内容：
-
-```text
-[1/5] Run demo application
-=== 当前锁定版本生成的 Prompt ===
-客户姓名：小林
-客户问题：包裹三天没有物流更新
-
-[2/5] Run YAML prompt test suite
-Total:   2
-Passed:  2 +
-Failed:  0 x
-Pass Rate: 100.0%
-
-[3/5] Run Python unit tests for v1 and v2
-Ran 3 tests
-OK
-
-[4/5] Validate mock response
-All validation rules passed!
-
-[5/5] Show prompt diff between v1 and v2
-Diff: support_reply (v1 → v2)
-
-All checks passed.
-```
-
-表格边框、颜色符号和每项耗时可能因终端环境不同而略有差异；通过数量和最终结论应一致。
+成功时，脚本应报告 2 项 YAML 测试通过、3 项 Python 测试通过，并以 `All checks passed.` 结束。
 
 ## 分步运行
 
@@ -101,12 +57,7 @@ python -X utf8 .\app.py --name "王女士" --issue "退款五天仍未到账" --
 python -X utf8 -m prompt_vcs.cli status --project .
 ```
 
-预期：
-
-```text
-support_reply   v1   ✓ Exists
-ticket_summary  v1   ✓ Exists
-```
+预期：`support_reply` 和 `ticket_summary` 均锁定在 `v1`。
 
 ### 3. 运行 Prompt 测试
 
@@ -155,13 +106,7 @@ python -X utf8 -m prompt_vcs.cli switch ticket_summary v2 --project .
 python -X utf8 .\app.py
 ```
 
-预期：应用输出中出现：
-
-```text
-工单优先级：普通
-不要提供密码或验证码
-【在线客服】小林：包裹三天没有物流更新（待客服处理）
-```
+预期：应用输出新增工单优先级和密码、验证码提醒。
 
 测试完成后可恢复初始状态：
 
