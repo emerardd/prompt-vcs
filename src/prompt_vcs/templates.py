@@ -9,6 +9,8 @@ import yaml
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 
+from prompt_vcs._storage import atomic_write_text
+
 
 # Create a sandboxed Jinja2 environment for safe template rendering
 # SandboxedEnvironment prevents access to private attributes and dangerous methods
@@ -133,8 +135,8 @@ def save_yaml_template(
         "template": template,
     }
     
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    content = yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    atomic_write_text(path, content)
 
 
 def load_prompts_file(path: Path) -> dict[str, dict]:
@@ -231,6 +233,6 @@ def save_prompts_file(path: Path, prompts: dict[str, dict]) -> None:
 
         data[prompt_id] = entry
     
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    content = yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    atomic_write_text(path, content)
 

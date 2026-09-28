@@ -69,7 +69,25 @@ export function selectPromptFromYaml(
                 return parsePromptValue(versionValue);
             }
         }
+        return null;
     }
 
     return parsePromptValue(prompts[key]);
+}
+
+export function parseLockfile(raw: string): Record<string, string> {
+    const data: unknown = JSON.parse(raw);
+    const validIdentifier = (value: string): boolean =>
+        /^[A-Za-z0-9_.-]+$/.test(value) && value !== '.' && value !== '..';
+    if (!data || typeof data !== 'object' || Array.isArray(data) ||
+        Object.entries(data).some(([key, value]) =>
+            !validIdentifier(key) || typeof value !== 'string' || !validIdentifier(value))) {
+        throw new Error('Invalid prompt lockfile');
+    }
+    return data as Record<string, string>;
+}
+
+export function selectPromptFile(files: string[], version?: string): string | null {
+    const file = `${version || 'v1'}.yaml`;
+    return files.includes(file) ? file : null;
 }

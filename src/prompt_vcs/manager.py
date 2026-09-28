@@ -390,6 +390,11 @@ class PromptManager:
                             data = load_yaml_template(yaml_path)
                             template = data["template"]
                         except Exception as e:
+                            if is_locked:
+                                raise PromptNotFoundError(
+                                    f"Failed to load locked prompt '{prompt_id}' version "
+                                    f"'{version}' from {yaml_path}: {e}"
+                                ) from e
                             warnings.warn(
                                 f"Failed to load prompt '{prompt_id}' version '{version}' "
                                 f"from {yaml_path}: {e}. Falling back to default content.",

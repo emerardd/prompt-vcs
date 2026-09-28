@@ -5,7 +5,9 @@ Tests for prompt_vcs.templates module - single file mode functions.
 import pytest
 import yaml
 
-from prompt_vcs.templates import load_prompts_file, save_prompts_file, render_template
+from prompt_vcs.templates import (
+    load_prompts_file, save_prompts_file, save_yaml_template, render_template,
+)
 
 
 class TestLoadPromptsFile:
@@ -163,6 +165,25 @@ class TestSavePromptsFile:
                 }
             }
         }
+
+
+@pytest.mark.parametrize("save", ["single", "split"])
+def test_failed_yaml_replace_preserves_existing_file(tmp_path, monkeypatch, save):
+    target = tmp_path / ("prompts.yaml" if save == "single" else "v2.yaml")
+    target.write_text("original content\n", encoding="utf-8")
+
+    def fail_replace(*args):
+        raise OSError("injected replace failure")
+
+    monkeypatch.setattr("prompt_vcs._storage.os.replace", fail_replace)
+    with pytest.raises(OSError, match="injected replace failure"):
+        if save == "single":
+            save_prompts_file(target, {"greeting": {"template": "New"}})
+        else:
+            save_yaml_template(target, template="New", version="v2")
+
+    assert target.read_text(encoding="utf-8") == "original content\n"
+    assert list(tmp_path.iterdir()) == [target]
 
 
 class TestRenderTemplate:

@@ -71,6 +71,19 @@ class TestPromptManager:
         """Test fallback to default content when not locked."""
         result = manager.get_prompt("unknown", "你好 {name}", name="世界")
         assert result == "你好 世界"
+
+    def test_locked_split_file_parse_failure_does_not_use_default(self, temp_project):
+        """A broken locked version must not render a different prompt."""
+        from prompt_vcs.api import PromptNotFoundError
+
+        (temp_project / PROMPTS_DIR / "greeting" / "v2.yaml").write_text(
+            "template: [broken", encoding="utf-8"
+        )
+        mgr = PromptManager()
+        mgr.set_project_root(temp_project)
+
+        with pytest.raises(PromptNotFoundError, match="Failed to load locked prompt"):
+            mgr.get_prompt("greeting", "Fallback {name}", name="Ada")
     
     def test_register_prompt(self, manager):
         """Test registering a prompt definition."""

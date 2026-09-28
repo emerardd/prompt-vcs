@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
     findPromptCallAtPosition,
+    parseLockfile,
+    selectPromptFile,
     selectPromptFromYaml,
 } from '../promptUtils';
 
@@ -48,4 +50,18 @@ test('selectPromptFromYaml resolves flat locked versions', () => {
     );
 
     assert.deepEqual(prompt, { template: 'Version two', description: undefined });
+});
+
+test('locked versions never fall back to a base template', () => {
+    assert.equal(selectPromptFromYaml({ greeting: { template: 'Base' } }, 'greeting', 'v2'), null);
+    assert.equal(selectPromptFile(['v1.yaml'], 'v2'), null);
+    assert.equal(selectPromptFile(['v2.yaml'], 'v2'), 'v2.yaml');
+    assert.equal(selectPromptFile(['v2.yaml']), null);
+});
+
+test('invalid lockfiles cannot silently disable version selection', () => {
+    assert.deepEqual(parseLockfile('{"greeting":"v2"}'), { greeting: 'v2' });
+    assert.throws(() => parseLockfile('{invalid'));
+    assert.throws(() => parseLockfile('{"greeting":2}'));
+    assert.throws(() => parseLockfile('{"greeting":"../other"}'));
 });

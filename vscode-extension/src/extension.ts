@@ -4,8 +4,10 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import {
     findPromptCallAtPosition,
+    parseLockfile,
     PromptData,
     PromptsYaml,
+    selectPromptFile,
     selectPromptFromYaml,
 } from './promptUtils';
 
@@ -178,23 +180,21 @@ class PromptDataProvider {
      */
     getPromptData(key: string, resource?: vscode.Uri): PromptData | null {
         const workspaceRoot = this.getWorkspaceRoot(resource);
-        if (!workspaceRoot) {
+        if (!workspaceRoot || !/^[A-Za-z0-9_.-]+$/.test(key) || key === '.' || key === '..') {
             return null;
         }
 
-        const lockedVersion = this.getLockedVersion(key, resource);
-
-        // 优先从单文件模式获取
-        const promptsFilePath = path.join(workspaceRoot, 'prompts.yaml');
-        if (fs.existsSync(promptsFilePath)) {
-            const data = this.getFromSingleFile(promptsFilePath, key, lockedVersion || undefined);
-            if (data) {
-                return data;
+        try {
+            const lockedVersion = this.getLockedVersion(key, resource);
+            const promptsFilePath = path.join(workspaceRoot, 'prompts.yaml');
+            if (fs.existsSync(promptsFilePath)) {
+                return this.getFromSingleFile(promptsFilePath, key, lockedVersion || undefined);
             }
+            return this.getFromMultiFile(workspaceRoot, key, lockedVersion || undefined);
+        } catch (error) {
+            console.error('[prompt-vcs] Failed to resolve locked prompt:', error);
+            return null;
         }
-
-        // 尝试多文件模式
-        return this.getFromMultiFile(workspaceRoot, key, lockedVersion || undefined);
     }
 
     /**
@@ -205,11 +205,17 @@ class PromptDataProvider {
         resource?: vscode.Uri
     ): { uri: vscode.Uri; line: number } | null {
         const workspaceRoot = this.getWorkspaceRoot(resource);
-        if (!workspaceRoot) {
+        if (!workspaceRoot || !/^[A-Za-z0-9_.-]+$/.test(key) || key === '.' || key === '..') {
             return null;
         }
 
-        const lockedVersion = this.getLockedVersion(key);
+        let lockedVersion: string | null;
+        try {
+            lockedVersion = this.getLockedVersion(key, resource);
+        } catch (error) {
+            console.error('[prompt-vcs] Failed to read lockfile:', error);
+            return null;
+        }
 
         // 单文件模式
         const promptsFilePath = path.join(workspaceRoot, 'prompts.yaml');
@@ -218,7 +224,10 @@ class PromptDataProvider {
             if (lockedVersion) {
                 line = this.findKeyLineInYaml(promptsFilePath, `${key}@${lockedVersion}`);
             }
-            if (line < 0) {
+            if (line < 0 && !lockedVersion) {
+                line = this.findKeyLineInYaml(promptsFilePath, key);
+            }
+            if (line < 0 && lockedVersion && this.getFromSingleFile(promptsFilePath, key, lockedVersion)) {
                 line = this.findKeyLineInYaml(promptsFilePath, key);
             }
             if (line >= 0) {
@@ -227,33 +236,20 @@ class PromptDataProvider {
                     line: line,
                 };
             }
+            return null;
         }
 
         // 多文件模式
         const promptDir = path.join(workspaceRoot, 'prompts', key);
         if (fs.existsSync(promptDir)) {
-            if (lockedVersion) {
-                const lockedPath = path.join(promptDir, `${lockedVersion}.yaml`);
-                if (fs.existsSync(lockedPath)) {
-                    return {
-                        uri: vscode.Uri.file(lockedPath),
-                        line: 0,
-                    };
+            const file = selectPromptFile(fs.readdirSync(promptDir), lockedVersion || undefined);
+            if (file) {
+                const selectedPath = path.join(promptDir, file);
+                if (!this.readYamlFile(selectedPath)) {
+                    return null;
                 }
-            }
-            // 优先查找 v1.yaml
-            const v1Path = path.join(promptDir, 'v1.yaml');
-            if (fs.existsSync(v1Path)) {
                 return {
-                    uri: vscode.Uri.file(v1Path),
-                    line: 0,
-                };
-            }
-            // 否则查找任意 yaml 文件
-            const files = fs.readdirSync(promptDir).filter(f => f.endsWith('.yaml'));
-            if (files.length > 0) {
-                return {
-                    uri: vscode.Uri.file(path.join(promptDir, files[0])),
+                    uri: vscode.Uri.file(selectedPath),
                     line: 0,
                 };
             }
@@ -323,30 +319,8 @@ class PromptDataProvider {
             return null;
         }
 
-        if (version) {
-            const versionPath = path.join(promptDir, `${version}.yaml`);
-            if (fs.existsSync(versionPath)) {
-                return this.readYamlFile(versionPath);
-            }
-        }
-
-        // 优先读取 v1.yaml
-        const v1Path = path.join(promptDir, 'v1.yaml');
-        if (fs.existsSync(v1Path)) {
-            return this.readYamlFile(v1Path);
-        }
-
-        // 读取目录中的第一个 yaml 文件
-        try {
-            const files = fs.readdirSync(promptDir).filter(f => f.endsWith('.yaml'));
-            if (files.length > 0) {
-                return this.readYamlFile(path.join(promptDir, files[0]));
-            }
-        } catch {
-            // 忽略错误
-        }
-
-        return null;
+        const file = selectPromptFile(fs.readdirSync(promptDir), version);
+        return file ? this.readYamlFile(path.join(promptDir, file)) : null;
     }
 
     /**
@@ -389,13 +363,13 @@ class PromptDataProvider {
             }
 
             const raw = fs.readFileSync(lockfilePath, 'utf-8');
-            const data = JSON.parse(raw) as Record<string, string>;
+            const data = parseLockfile(raw);
             cache.lockfile = data;
             cache.lockfileMtime = mtime;
 
             return data[promptId] ?? null;
-        } catch {
-            return null;
+        } catch (error) {
+            throw new Error(`Failed to read lockfile ${lockfilePath}: ${String(error)}`);
         }
     }
 
