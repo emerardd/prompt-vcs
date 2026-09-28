@@ -2,6 +2,24 @@
 
 All notable changes to prompt-vcs are documented in this file.
 
+## [0.6.1] - 2026-09-28
+
+### Added
+
+- An offline customer-support example with a runnable walkthrough and tests.
+
+### Fixed
+
+- Locked prompt versions now fail when a split-file template is invalid instead of
+  rendering the code default; the VS Code extension also avoids previewing a
+  different version when a lock is missing or invalid.
+- YAML prompt files and JSON state files use atomic replacement, preserving the
+  previous file when a write fails.
+- VS Code definition lookup reads the lockfile from the current workspace root.
+- Updated the VS Code extension's `js-yaml` dependency to the patched 5.2.2
+  release.
+- Stabilized Ruff rule selection in CI and refreshed the release workflow actions.
+
 ## [0.6.0] - 2026-07-23
 
 ### Added

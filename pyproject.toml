@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prompt-vcs"
-version = "0.6.0"
+version = "0.6.1"
 description = "Git-native prompt management library for LLM applications"
 readme = "README.md"
 license = "MIT"
@@ -51,7 +51,7 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.8",
     "tomli>=2.0; python_version < '3.11'",
-    "twine>=5.0",
+    "twine>=7.0",
 ]
 validation = [
     "jsonschema>=4.0",
